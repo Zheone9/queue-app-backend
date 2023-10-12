@@ -16,7 +16,7 @@ class Queue {
     return this.items.length === 0
   }
 
-  find(item) {
+  findIndex(item) {
     return this.items.indexOf(item)
   }
 }

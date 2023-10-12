@@ -21,11 +21,15 @@ let clientData = null
 io.on('connection', (socket) => {
   socket.on('join', (username) => {
     socketQueue.enqueue(socket)
+    console.log(socket.id)
     socket.username = username
-    console.log(`${username} has joined.`)
-    socket.emit('informacionCola', socketQueue.find(socket) + 1)
-    console.log('Position in queue: ', socketQueue.find(socket) + 1)
-    const userIndex = socketQueue.find(socket)
+    socket.rol = 'client'
+    console.log(`${username} has joined. su id: ${socket.id}`)
+    socket.emit('informacionCola', socketQueue.findIndex(socket) + 1)
+
+    console.log('Position in queue: ', socketQueue.findIndex(socket) + 1)
+
+    const userIndex = socketQueue.findIndex(socket)
     if (userIndex === 0) {
       clientData = {
         rol: 'client',
@@ -49,18 +53,52 @@ io.on('connection', (socket) => {
     if (clientData) {
       socket.emit('firstClient', clientData.username)
     }
-    io.to(socketQueue.items[0]).emit('infoStaff', staffData.username)
+    if (socketQueue.items[0]) {
+      io.to(socketQueue.items[0].id).emit('infoStaff', staffData.username)
+    }
+  })
+
+  socket.on('sendMessageStaff', (data) => {
+    console.log('se recibió del cliente y para el staff', data)
+    io.emit('receiveMessageClient', {
+      message: data,
+      username: socket.username,
+      rol: 'client'
+    })
+  })
+
+  socket.on('sendMessageClient', (data) => {
+    console.log('se recibió del staff y va para el cliente', data)
+    if (socketQueue.items[0]) {
+      io.to(socketQueue.items[0].id).emit('receiveMessageStaff', {
+        message: data,
+        username: socket.username,
+        rol: 'staff'
+      })
+    }
+  })
+
+  socket.on('nextClient', () => {
+    console.log('nextClient')
+    const client = socketQueue.items[0]
+    if (client && client.disconnect) {
+      io.to(socketQueue.items[0].id).emit('finalizeChat', true)
+      client.disconnect()
+    }
   })
 
   socket.on('disconnect', () => {
     if (socket.username) {
       console.log(`${socket.username} has disconnected.`)
     }
+    console.log(socket.rol)
     if (socket.rol === 'staff') {
       staffData = null
-      io.to(socketQueue.items[0]).emit('infoStaff', null)
+      if (socketQueue.items[0]) {
+        io.to(socketQueue.items[0].id).emit('infoStaff', null)
+      }
     }
-    const userIndex = socketQueue.find(socket)
+    const userIndex = socketQueue.findIndex(socket)
     if (userIndex === 0) {
       clientData = null
       io.emit('firstClient', null)
@@ -73,8 +111,11 @@ io.on('connection', (socket) => {
             rol: 'client',
             username: socket.username
           }
+          console.log('nuevo client')
           io.emit('firstClient', clientData.username)
-          io.to(socketQueue.items[0].id).emit('infoStaff', staffData.username)
+          if (socketQueue.items[0]) {
+            io.to(socketQueue.items[0].id).emit('infoStaff', staffData.username)
+          }
         }
         io.to(socket.id).emit('informacionCola', index + 1)
       })
